@@ -30,8 +30,16 @@
 </div>
 
 <div class="form-group">
-    <label for="imageUpload" class="form-input file-upload-label">Choose Image</label>
-    <input type="file" clear-on-submit id="imageUpload" name="imageFiles[]" accept="image/*" multiple
+    <label class="form-label">Custom Display Size (optional):</label>
+    <div class="form-group">
+        <input type="number" id="displayWidth" name="displayWidth" min="1" placeholder="Width (px)" class="form-input" style="max-width: 180px; display:inline-block;">
+        <input type="number" id="displayHeight" name="displayHeight" min="1" placeholder="Height (px)" class="form-input" style="max-width: 180px; display:inline-block; margin-left:10px;">
+    </div>
+</div>
+
+<div class="form-group">
+    <label for="imageUpload" class="form-input file-upload-label">Choose Image / ePub</label>
+    <input type="file" clear-on-submit id="imageUpload" name="imageFiles[]" accept="image/*,.epub,application/epub+zip" multiple
            class="file-upload-input" onchange="addFiles()">
 </div>
 
@@ -99,6 +107,8 @@
             document.getElementById('padImage').checked = pluginSettings.padImage == 'false';
             document.getElementById('randomize').checked = pluginSettings.randomize;
             document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
+            document.getElementById('displayWidth').value = pluginSettings.displayWidth || '';
+            document.getElementById('displayHeight').value = pluginSettings.displayHeight || '';
 
             const existingFiles = pluginSettings['imageFiles[]'] || []
             backgroundOption = pluginSettings.backgroundOption || 'blur'
