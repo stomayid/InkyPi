@@ -90,8 +90,34 @@ class ImageUpload(BasePlugin):
                 background_color = ImageColor.getcolor(settings.get('backgroundColor') or "white", image.mode)
                 image = ImageOps.pad(image, dimensions, color=background_color, method=Image.Resampling.LANCZOS)
 
+        image = self.apply_display_size(image, settings, dimensions)
+
         logger.info("=== Image Upload Plugin: Image generation complete ===")
         return image
+
+    def apply_display_size(self, image: Image, settings, dimensions: tuple) -> Image:
+        """Resize and center the image on a full-screen canvas when size overrides are provided."""
+        display_width = settings.get('displayWidth')
+        display_height = settings.get('displayHeight')
+
+        if not display_width and not display_height:
+            return image
+
+        try:
+            target_width = max(1, min(int(display_width or dimensions[0]), dimensions[0]))
+            target_height = max(1, min(int(display_height or dimensions[1]), dimensions[1]))
+        except (TypeError, ValueError):
+            logger.warning("Invalid display size provided, skipping size override")
+            return image
+
+        resized_image = ImageOps.contain(image, (target_width, target_height), method=Image.Resampling.LANCZOS)
+        canvas_color = ImageColor.getcolor(settings.get('backgroundColor') or "white", resized_image.mode)
+        canvas = Image.new(resized_image.mode, dimensions, canvas_color)
+
+        x = (dimensions[0] - resized_image.width) // 2
+        y = (dimensions[1] - resized_image.height) // 2
+        canvas.paste(resized_image, (x, y))
+        return canvas
 
     def cleanup(self, settings):
         """Delete all uploaded image files associated with this plugin instance."""

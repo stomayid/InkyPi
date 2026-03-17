@@ -2,7 +2,10 @@ import logging
 import os
 import socket
 import subprocess
+import xml.etree.ElementTree as ET
+import zipfile
 
+from io import BytesIO
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -143,7 +146,7 @@ def parse_form(request_form):
     return request_dict
 
 def handle_request_files(request_files, form_data={}):
-    allowed_file_extensions = {'pdf', 'png', 'avif', 'jpg', 'jpeg', 'gif', 'webp', 'heif', 'heic'}
+    allowed_file_extensions = {'pdf', 'png', 'avif', 'jpg', 'jpeg', 'gif', 'webp', 'heif', 'heic', 'epub'}
     file_location_map = {}
     # handle existing file locations being provided as part of the form data
     for key in set(request_files.keys()):
@@ -157,8 +160,8 @@ def handle_request_files(request_files, form_data={}):
         if not file_name:
             continue
 
-        extension = os.path.splitext(file_name)[1].replace('.', '')
-        if not extension or extension.lower() not in allowed_file_extensions:
+        extension = os.path.splitext(file_name)[1].replace('.', '').lower()
+        if not extension or extension not in allowed_file_extensions:
             continue
 
         file_name = os.path.basename(file_name)
@@ -166,8 +169,24 @@ def handle_request_files(request_files, form_data={}):
         file_save_dir = resolve_path(os.path.join("static", "images", "saved"))
         file_path = os.path.join(file_save_dir, file_name)
 
+        # Convert ePub files to a cover image.
+        if extension == 'epub':
+            try:
+                cover_image = extract_epub_cover(file.stream)
+
+                if not cover_image:
+                    logger.warning(f"No cover image found in {file_name}")
+                    continue
+
+                file_name = f"{os.path.splitext(file_name)[0]}_cover.png"
+                file_path = os.path.join(file_save_dir, file_name)
+                cover_image.save(file_path, format='PNG')
+            except Exception as e:
+                logger.warning(f"Failed to process epub file {file_name}: {e}")
+                continue
+
         # Open the image and apply EXIF transformation before saving
-        if extension in {'jpg', 'jpeg'}:
+        elif extension in {'jpg', 'jpeg'}:
             try:
                 with Image.open(file) as img:
                     img = ImageOps.exif_transpose(img)
@@ -185,3 +204,51 @@ def handle_request_files(request_files, form_data={}):
         else:
             file_location_map[key] = file_path
     return file_location_map
+
+
+def extract_epub_cover(epub_stream):
+    """Extract and return a PIL image for the ePub cover."""
+    epub_stream.seek(0)
+    epub_data = BytesIO(epub_stream.read())
+
+    with zipfile.ZipFile(epub_data) as archive:
+        container_root = ET.fromstring(archive.read('META-INF/container.xml'))
+        rootfile = container_root.find(
+            ".//{urn:oasis:names:tc:opendocument:xmlns:container}rootfile"
+        )
+        if rootfile is None:
+            return None
+
+        opf_path = rootfile.attrib.get('full-path')
+        if not opf_path:
+            return None
+
+        opf_dir = os.path.dirname(opf_path)
+        opf_root = ET.fromstring(archive.read(opf_path))
+        namespaces = {'opf': 'http://www.idpf.org/2007/opf'}
+
+        # ePub 2 convention: metadata has a <meta name="cover" content="cover-item-id" />
+        meta_cover = opf_root.find(".//opf:metadata/opf:meta[@name='cover']", namespaces)
+        if meta_cover is not None:
+            cover_id = meta_cover.attrib.get('content')
+            if cover_id:
+                cover_item = opf_root.find(f".//opf:item[@id='{cover_id}']", namespaces)
+                if cover_item is not None:
+                    cover_href = cover_item.attrib.get('href')
+                    if cover_href:
+                        return _open_epub_image(archive, opf_dir, cover_href)
+
+        # ePub 3 convention: item property="cover-image"
+        cover_item = opf_root.find(".//opf:item[@properties='cover-image']", namespaces)
+        if cover_item is not None:
+            cover_href = cover_item.attrib.get('href')
+            if cover_href:
+                return _open_epub_image(archive, opf_dir, cover_href)
+
+    return None
+
+
+def _open_epub_image(archive, opf_dir, image_href):
+    image_path = os.path.normpath(os.path.join(opf_dir, image_href))
+    with archive.open(image_path) as image_file:
+        return Image.open(BytesIO(image_file.read())).convert('RGB')

@@ -30,8 +30,16 @@
 </div>
 
 <div class="form-group">
+    <label class="form-label" for="displayWidth">Display Size (px):</label>
+    <div class="form-group">
+        <input type="number" id="displayWidth" name="displayWidth" min="1" step="1" placeholder="Width">
+        <input type="number" id="displayHeight" name="displayHeight" min="1" step="1" placeholder="Height">
+    </div>
+</div>
+
+<div class="form-group">
     <label for="imageUpload" class="form-input file-upload-label">Choose Image</label>
-    <input type="file" clear-on-submit id="imageUpload" name="imageFiles[]" accept="image/*" multiple
+    <input type="file" clear-on-submit id="imageUpload" name="imageFiles[]" accept="image/*,.epub" multiple
            class="file-upload-input" onchange="addFiles()">
 </div>
 
@@ -99,6 +107,8 @@
             document.getElementById('padImage').checked = pluginSettings.padImage == 'false';
             document.getElementById('randomize').checked = pluginSettings.randomize;
             document.getElementById('backgroundColor').value = pluginSettings.backgroundColor;
+            document.getElementById('displayWidth').value = pluginSettings.displayWidth || '';
+            document.getElementById('displayHeight').value = pluginSettings.displayHeight || '';
 
             const existingFiles = pluginSettings['imageFiles[]'] || []
             backgroundOption = pluginSettings.backgroundOption || 'blur'
